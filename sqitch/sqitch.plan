@@ -1,0 +1,19 @@
+%syntax-version=1.0.0
+%project=colored
+%uri=https://github.com/col0redby/colored-be
+
+database_colored 2020-04-18T17:47:17Z ncharitinov <nikita.ncharitinov@amobee.com> # Creating colored database
+table_users [database_colored] 2020-04-18T21:48:57Z ncharitinov <nikita.ncharitinov@amobee.com> # Creating a users table
+table_user_avatars [database_colored table_users] 2020-04-18T21:51:10Z ncharitinov <nikita.ncharitinov@amobee.com> # Creating a user_avatars table
+table_genres [database_colored] 2020-04-18T21:52:02Z ncharitinov <nikita.ncharitinov@amobee.com> # Creating a genres table
+table_genre_covers [database_colored table_genres] 2020-04-18T21:53:28Z ncharitinov <nikita.ncharitinov@amobee.com> # Creating a genre_covers table
+table_albums [database_colored] 2020-04-18T21:54:12Z ncharitinov <nikita.ncharitinov@amobee.com> # Creating an albums table
+table_album_covers [database_colored table_albums] 2020-04-18T21:54:52Z ncharitinov <nikita.ncharitinov@amobee.com> # Creating a album_covers table
+table_images [database_colored table_users table_albums table_genres] 2020-04-18T21:56:07Z ncharitinov <nikita.ncharitinov@amobee.com> # Creating an images table
+table_image_colors [database_colored table_images] 2020-04-18T21:57:38Z ncharitinov <nikita.ncharitinov@amobee.com> # Creating an image_colors table
+table_image_metadata [database_colored table_images] 2020-04-18T21:58:44Z ncharitinov <nikita.ncharitinov@amobee.com> # Creating an image_metadata table
+table_views [database_colored table_images table_users] 2020-04-18T21:59:31Z ncharitinov <nikita.ncharitinov@amobee.com> # Creating an views table
+table_likes [database_colored table_images table_users] 2020-04-18T22:00:00Z ncharitinov <nikita.ncharitinov@amobee.com> # Creating a likes table
+table_comments [database_colored table_images table_users] 2020-04-18T22:00:31Z ncharitinov <nikita.ncharitinov@amobee.com> # Creating a comments table
+table_tags [database_colored] 2020-04-18T22:01:16Z ncharitinov <nikita.ncharitinov@amobee.com> # Creating a tags table
+table_image_tags [database_colored table_images table_tags] 2020-04-18T22:02:14Z ncharitinov <nikita.ncharitinov@amobee.com> # Creating an image_tags table
