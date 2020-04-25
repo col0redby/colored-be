@@ -28,6 +28,9 @@ class ImagesRoutes(
     config: Config
 ) {
 
+  import io.circe.generic.auto._
+  import org.http4s.circe.CirceEntityCodec._
+
   // Just to somehow emulate user
   val username = "nkharitonov"
 
