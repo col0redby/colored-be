@@ -52,8 +52,8 @@ class ImagesRoutes(
                 streamSize <- imagePart.body.compile.toList.map(_.length)
 
                 path = S3Path(
-                  config.s3.bucket,
-                  s"$username/${config.s3.imageOriginalFolder}/$filename",
+                  config.aws.s3.bucket,
+                  s"$username/${config.aws.s3.imageOriginalFolder}/$filename",
                   Some(
                     S3MetaInfo.const(
                       constSize = Some(streamSize),
@@ -71,7 +71,6 @@ class ImagesRoutes(
                   Http -> http4s -> Stream[IO, Byte] -> StreamUnicastPublisher -> AsyncRequestBody -> s3 chain
                 there is a bytes losing when an aws sdk sending the first chunk of bytes. Don't know how to
                 solve it now, need to dig deeper later ¯\_(ツ)_/¯.
-                TODO: handle errors.
                  */
                 uploadResponse <- {
                   imagePart.body
@@ -82,17 +81,21 @@ class ImagesRoutes(
                     .attempt
                 }
 
-                objectUrl <- Ok(
-                  s3.utilities()
-                    .getUrl(
-                      GetUrlRequest
-                        .builder()
-                        .bucket(path.bucket)
-                        .key(path.key)
-                        .build()
+                objectUrl <- uploadResponse match {
+                  case Left(error) => InternalServerError(error.getMessage)
+                  case Right(value) =>
+                    Ok(
+                      s3.utilities()
+                        .getUrl(
+                          GetUrlRequest
+                            .builder()
+                            .bucket(path.bucket)
+                            .key(path.key)
+                            .build()
+                        )
+                        .toString
                     )
-                    .toString
-                )
+                }
               } yield objectUrl
             case None =>
               UnsupportedMediaType(

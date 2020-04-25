@@ -10,3 +10,15 @@ services:
     - 3310:3306
     environment:
       MYSQL_ROOT_PASSWORD: root
+
+  be:
+    image: colored-be:0.1.0-SNAPSHOT
+    depends_on:
+      - db
+    ports:
+      - "8070:8070"
+    restart: on-failure
+    volumes:
+      - "./src/main/resources/:./src/main/resources/"
+      - "~/.aws:~/.aws"
+    command: "--config-file ./src/main/resources/application-local.conf"

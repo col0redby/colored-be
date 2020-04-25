@@ -1,16 +1,15 @@
 package com.colored.be
 
-import cats.effect._
+import java.io.File
+import java.nio.file.Paths
 
+import cats.effect._
 import org.http4s.server.blaze.BlazeServerBuilder
 import org.http4s.implicits._
-
 import doobie.hikari.HikariTransactor
 import doobie.util.ExecutionContexts
 
-import java.nio.file.Paths
 import software.amazon.awssdk.services.s3.S3AsyncClient
-
 import blobstore.fs.FileStore
 import blobstore.s3.S3Store
 
@@ -18,9 +17,10 @@ import com.colored.be.config.Config
 import com.colored.be.db.Database
 import com.colored.be.repository.ImagesRepository
 import com.colored.be.routes.ImagesRoutes
+import com.colored.be.aws.AwsSdk
 
 object HttpServer {
-  def create(configFile: String = "application.conf")(
+  def create(configFile: File)(
       implicit contextShift: ContextShift[IO],
       concurrentEffect: ConcurrentEffect[IO],
       timer: Timer[IO]
@@ -29,7 +29,7 @@ object HttpServer {
   }
 
   private def resources(
-      configFile: String
+      configFile: File
   )(implicit contextShift: ContextShift[IO]): Resource[IO, Resources] = {
     for {
       config <- Config.load(configFile)
@@ -38,7 +38,7 @@ object HttpServer {
       )
       blocker <- Blocker[IO]
       transactor <- Database.transactor(config.database, ec, blocker)
-      s3AsyncClient <- Resource.liftF(IO.pure(S3AsyncClient.builder().build()))
+      s3AsyncClient <- AwsSdk.s3AsyncClient(config)
       s3Store <- Resource.liftF(S3Store[IO](s3AsyncClient))
       fileStore <- Resource.liftF(
         IO.pure(FileStore[IO](Paths.get("/"), blocker))
