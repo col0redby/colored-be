@@ -15,9 +15,9 @@ CREATE TABLE IF NOT EXISTS views
   INDEX image_ind(image_id),
   image_id   MEDIUMINT,
   user_id    MEDIUMINT,
-  ts         TIMESTAMP,
-  FOREIGN KEY (image_id) REFERENCES images (id) ON DELETE no action ON UPDATE no action,
-  FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE no action ON UPDATE no action
+  dt         DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (image_id) REFERENCES images (id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );
 
 COMMIT;

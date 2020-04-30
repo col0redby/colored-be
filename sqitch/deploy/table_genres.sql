@@ -10,8 +10,7 @@ USE colored;
 CREATE TABLE IF NOT EXISTS genres 
 (
   id          MEDIUMINT AUTO_INCREMENT PRIMARY KEY,
-  title       VARCHAR(50),
-  image_url   VARCHAR(255)
+  title       VARCHAR(50)
 );
 
 COMMIT;

@@ -15,10 +15,10 @@ CREATE TABLE IF NOT EXISTS comments
   INDEX image_ind(image_id),
   image_id   MEDIUMINT,
   user_id    MEDIUMINT,
-  ts         TIMESTAMP,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   text       text,
-  FOREIGN KEY (image_id) REFERENCES images (id) ON DELETE no action ON UPDATE no action,
-  FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE no action ON UPDATE no action
+  FOREIGN KEY (image_id) REFERENCES images (id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );
 
 COMMIT;

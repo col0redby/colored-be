@@ -3,21 +3,21 @@ package com.colored.be
 import java.io.File
 import java.nio.file.Paths
 
-import cats.effect._
-import org.http4s.server.blaze.BlazeServerBuilder
-import org.http4s.implicits._
-import doobie.hikari.HikariTransactor
-import doobie.util.ExecutionContexts
-
-import software.amazon.awssdk.services.s3.S3AsyncClient
 import blobstore.fs.FileStore
 import blobstore.s3.S3Store
-
+import cats.effect.{Blocker, ConcurrentEffect, ContextShift, ExitCode, IO, Resource, Timer}
+import com.colored.be.aws.AwsSdk
 import com.colored.be.config.Config
 import com.colored.be.db.Database
-import com.colored.be.repository.ImagesRepository
-import com.colored.be.routes.ImagesRoutes
-import com.colored.be.aws.AwsSdk
+import com.colored.be.repository.{GenresRepository, ImagesRepository}
+import com.colored.be.routes.{GenresRoutes, ImagesRoutes}
+import com.colored.be.service.{GenresService, ImagesService}
+import doobie.hikari.HikariTransactor
+import doobie.util.ExecutionContexts
+import org.http4s.server.blaze.BlazeServerBuilder
+import org.http4s.implicits._
+import software.amazon.awssdk.services.s3.S3AsyncClient
+import cats.implicits._
 
 object HttpServer {
   def create(configFile: File)(
@@ -50,18 +50,24 @@ object HttpServer {
       implicit concurrentEffect: ConcurrentEffect[IO],
       timer: Timer[IO]
   ): IO[ExitCode] = {
-    val repository = new ImagesRepository(resources.transactor)
+    val imagesRepository = new ImagesRepository(resources.transactor)
+    val imagesService = new ImagesService(
+      imagesRepository,
+      resources.s3AsyncClient,
+      resources.s3Store,
+      resources.config
+    )
+    val imagesRoutes = new ImagesRoutes(imagesService).routes
+
+    val genresRepository = new GenresRepository(resources.transactor)
+    val genresService = new GenresService(genresRepository)
+    val genresRoutes = new GenresRoutes(genresService).routes
+
+    val routes = imagesRoutes <+> genresRoutes
+
     BlazeServerBuilder[IO]
       .bindHttp(resources.config.server.port, resources.config.server.host)
-      .withHttpApp(
-        new ImagesRoutes(
-          repository,
-          resources.s3AsyncClient,
-          resources.s3Store,
-          resources.fileStore,
-          resources.config
-        ).routes.orNotFound
-      )
+      .withHttpApp(routes.orNotFound)
       .serve
       .compile
       .lastOrError

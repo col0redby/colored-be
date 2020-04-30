@@ -2,8 +2,7 @@ package com.colored.be
 
 import java.io.File
 
-import cats.effect.IOApp
-import cats.effect.{ExitCode, IO}
+import cats.effect.{ExitCode, IO, IOApp}
 
 object App extends IOApp {
   def run(args: List[String]): IO[ExitCode] = {

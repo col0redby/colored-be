@@ -9,6 +9,7 @@ table_genres [database_colored] 2020-04-18T21:52:02Z ncharitinov <nikita.ncharit
 table_genre_covers [database_colored table_genres] 2020-04-18T21:53:28Z ncharitinov <nikita.ncharitinov@amobee.com> # Creating a genre_covers table
 table_albums [database_colored] 2020-04-18T21:54:12Z ncharitinov <nikita.ncharitinov@amobee.com> # Creating an albums table
 table_album_covers [database_colored table_albums] 2020-04-18T21:54:52Z ncharitinov <nikita.ncharitinov@amobee.com> # Creating a album_covers table
+table_images_access_levels [database_colored] 2020-04-28T08:48:33Z ncharitinov <nikita.ncharitinov@amobee.com> # Creating an table_images_access_levels table, it will store image access levels
 table_images [database_colored table_users table_albums table_genres] 2020-04-18T21:56:07Z ncharitinov <nikita.ncharitinov@amobee.com> # Creating an images table
 table_image_colors [database_colored table_images] 2020-04-18T21:57:38Z ncharitinov <nikita.ncharitinov@amobee.com> # Creating an image_colors table
 table_image_metadata [database_colored table_images] 2020-04-18T21:58:44Z ncharitinov <nikita.ncharitinov@amobee.com> # Creating an image_metadata table
