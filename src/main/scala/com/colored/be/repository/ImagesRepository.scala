@@ -12,14 +12,19 @@ import com.colored.be.models.exceptions.ImageNotFound
 import com.colored.be.models.tables.{
   AlbumsTable,
   ColorsTable,
+  CommentView,
   CommentsTable,
   GenresTable,
+  GetImageView,
   ImageAccessLevelsTable,
   ImageMetadataTable,
   ImagesTable,
+  LikeView,
   LikesTable,
+  SelectImageView,
   TagsTable,
   UserAvatarsTable,
+  UserView,
   UsersTable
 }
 import doobie.free.connection
@@ -29,7 +34,7 @@ import scala.collection.mutable.ArrayBuffer
 
 class ImagesRepository(transactor: Transactor[IO]) {
 
-  import com.colored.be.models.dao.Mappings._
+  import com.colored.be.models.tables.Mappings._
 
   def saveImage(image: ImagePost): IO[Either[Throwable, Int]] = {
     for {
@@ -71,52 +76,30 @@ class ImagesRepository(transactor: Transactor[IO]) {
       .attempt
   }
 
-  type GetImageType = (
-      ImagesTable,
-      ImageAccessLevelsTable,
-      (UsersTable, Option[UserAvatarsTable]),
-      Option[AlbumsTable],
-      Option[GenresTable],
-      List[TagsTable],
-      Int,
-      List[(LikesTable, UsersTable, Option[UserAvatarsTable])],
-      List[(CommentsTable, UsersTable, Option[UserAvatarsTable])],
-      List[ColorsTable],
-      Option[ImageMetadataTable]
-  )
-
-  type SelectImageType = (
-      ImagesTable,
-      ImageAccessLevelsTable,
-      Option[AlbumsTable],
-      Option[GenresTable],
-      Option[ImageMetadataTable]
-  )
-
-  def getImage(id: Int): IO[Either[Throwable, GetImageType]] = {
+  def getImage(id: Int): IO[Either[Throwable, GetImageView]] = {
     (for {
-      imageOption <- selectImage(id).query[SelectImageType].option
+      imageOption <- selectImage(id).query[SelectImageView].option
       result <- imageOption.fold(
         Either
-          .left[Throwable, GetImageType](new ImageNotFound)
+          .left[Throwable, GetImageView](new ImageNotFound)
           .pure[ConnectionIO]
       ) {
-        case (image, accessLevel, album, genre, metadata) =>
+        case SelectImageView(image, accessLevel, album, genre, metadata) =>
           for {
             user <- selectUser(image.userId)
-              .query[(UsersTable, Option[UserAvatarsTable])]
+              .query[UserView]
               .unique
             tags <- selectTags(image.id).query[TagsTable].to[List]
             views <- selectViewsCount(image.id).query[Int].unique
             likes <- selectLikes(image.id)
-              .query[(LikesTable, UsersTable, Option[UserAvatarsTable])]
+              .query[LikeView]
               .to[List]
             comments <- selectComments(image.id)
-              .query[(CommentsTable, UsersTable, Option[UserAvatarsTable])]
+              .query[CommentView]
               .to[List]
             colors <- selectColors(image.id).query[ColorsTable].to[List]
           } yield Right(
-            (
+            GetImageView(
               image,
               accessLevel,
               user,
@@ -152,16 +135,53 @@ class ImagesRepository(transactor: Transactor[IO]) {
     deleteImageFr(id).update.run.transact(transactor).attempt
 
   def listAccessLevels(): IO[Either[Throwable, List[ImageAccessLevelsTable]]] =
-    selectAccessLevels.query[ImageAccessLevelsTable].to[List].transact(transactor).attempt
+    selectAccessLevels
+      .query[ImageAccessLevelsTable]
+      .to[List]
+      .transact(transactor)
+      .attempt
 
+  /*
+  Likes
+   */
+  def like(imageId: Int, userId: Int): IO[Either[Throwable, List[LikeView]]] =
+    (for {
+      like <- sql"""
+             |INSERT INTO likes(image_id, user_id) VALUES ($imageId, $userId) 
+             |ON DUPLICATE KEY UPDATE created_at = current_timestamp
+             |""".stripMargin.update.run
+      likes <- selectLikes(imageId)
+        .query[LikeView]
+        .to[List]
+    } yield likes).transact(transactor).attempt
+
+  def unlike(imageId: Int, userId: Int): IO[Either[Throwable, List[LikeView]]] =
+    (for {
+      like <- sql"DELETE FROM likes WHERE image_id = $imageId AND user_id = $userId".update.run
+      likes <- selectLikes(imageId)
+        .query[LikeView]
+        .to[List]
+    } yield likes).transact(transactor).attempt
+
+  /*
+  Comments
+   */
+  def saveComment(imageId: Int, userId: Int, text: String): IO[Either[Throwable, List[CommentView]]] =
+    (for {
+      comment <- sql"INSERT INTO comments(image_id, user_id, text) VALUES ($imageId, $userId, $text)".update.run
+      comments <- selectComments(imageId)
+        .query[CommentView]
+        .to[List]
+    } yield comments).transact(transactor).attempt
 
   /*
   Private help methods that returns sql fragments
    */
   private def insertImage(image: ImagePost) =
     sql"""
-         |INSERT INTO images (title, description, original, user_id, genre_id, access_level_id)
-         |VALUES (${image.title}, ${image.description}, ${image.original}, ${image.userId}, ${image.genreId}, ${image.accessLevelId})
+         |INSERT INTO images (title, description, original, user_id, album_id, genre_id, access_level_id)
+         |VALUES (${image.title}, ${image.description}, ${image.original}, ${image.userId}, ${image.albumId},
+         |${image.genreId}, ${image.accessLevelId})
          |""".stripMargin
 
   private def selectImages() =
@@ -224,7 +244,7 @@ class ImagesRepository(transactor: Transactor[IO]) {
     sql"""
          |SELECT
          |    -- likes
-         |    l.id, image_id, l.user_id, created_at,
+         |    image_id, l.user_id, created_at,
          |    -- user
          |    u.id, u.username, u.email, u.country, u.birthday,
          |    -- user avatar

@@ -1,6 +1,3 @@
-import Dependencies._
-import com.typesafe.sbt.packager.docker.Cmd
-
 ThisBuild / scalaVersion := "2.13.1"
 ThisBuild / version := "0.1.0-SNAPSHOT"
 ThisBuild / organization := "com.colored"
@@ -12,6 +9,8 @@ val circeVersion = "0.13.0"
 val doobieVersion = "0.8.8"
 val pureConfigVersion = "0.12.3"
 val http4sVersion = "0.21.1"
+
+lazy val scalaTest = "org.scalatest" %% "scalatest" % "3.1.1"
 
 lazy val root = (project in file("."))
   .enablePlugins(DockerPlugin)

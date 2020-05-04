@@ -1,4 +1,4 @@
-package com.colored.be.models.dao
+package com.colored.be.models.tables
 
 import com.colored.be.models.ImageAccessLevel
 import doobie.util.{Get, Put}

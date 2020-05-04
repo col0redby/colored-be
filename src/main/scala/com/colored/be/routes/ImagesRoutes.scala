@@ -8,7 +8,13 @@ import org.http4s.HttpRoutes
 import org.http4s.headers.`Content-Disposition`
 import org.http4s.multipart.Multipart
 import com.colored.be.Constants.eligibleContentTypes
-import com.colored.be.models.dto.{ImagePost, ImagePut}
+import com.colored.be.models.dto.{
+  CommentPost,
+  ImagePost,
+  ImagePut,
+  LikeDto,
+  LikePost
+}
 import com.colored.be.models.exceptions.ImageNotFound
 import com.colored.be.service.ImagesService
 
@@ -94,12 +100,51 @@ class ImagesRoutes(imagesService: ImagesService) {
         )
       } yield res
 
+    /*
+      Image access levels
+     */
     case GET -> Root / "api" / "v1" / "images" / "access-levels" =>
       for {
         listResult <- imagesService.listAccessLevels()
         res <- listResult.fold(
           e => InternalServerError(e.getMessage),
           Ok(_)
+        )
+      } yield res
+
+    /*
+    Likes
+     */
+    case req @ POST -> Root / "api" / "v1" / "images" / "like" =>
+      for {
+        like <- req.as[LikePost]
+        likeResult <- imagesService.like(like)
+        res <- likeResult.fold(
+          e => InternalServerError(e.getMessage),
+          Created(_)
+        )
+      } yield res
+
+    case req @ DELETE -> Root / "api" / "v1" / "images" / "unlike" =>
+      for {
+        unlike <- req.as[LikePost]
+        unlikeResult <- imagesService.unlike(unlike)
+        res <- unlikeResult.fold(
+          e => InternalServerError(e.getMessage),
+          Ok(_)
+        )
+      } yield res
+
+    /*
+    Comments
+     */
+    case req @ POST -> Root / "api" / "v1" / "images" / IntVar(id) / "comment" =>
+      for {
+        comment <- req.as[CommentPost]
+        commentSaveResult <- imagesService.saveComment(id, comment)
+        res <- commentSaveResult.fold(
+          e => InternalServerError(e.getMessage),
+          Created(_)
         )
       } yield res
   }

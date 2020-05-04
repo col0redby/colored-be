@@ -6,38 +6,18 @@ import blobstore.s3.{S3MetaInfo, S3Path, S3Store}
 import cats.effect.IO
 import com.colored.be.config.Config
 import com.colored.be.models.User
-import com.colored.be.models.dto.{
-  AlbumDto,
-  ColorDto,
-  CommentDto,
-  CommentsList,
-  GenreDto,
-  ImageAccessLevelDto,
-  ImageGet,
-  ImageList,
-  ImageMetadataDto,
-  ImagePost,
-  ImagePut,
-  LikeDto,
-  LikesList,
-  TagDto,
-  UserAvatarDto,
-  UserDto
-}
+import com.colored.be.models.dto._
 import com.colored.be.repository.ImagesRepository
 import software.amazon.awssdk.services.s3.model.{GetUrlRequest, ObjectCannedACL}
 import fs2.Stream
 import software.amazon.awssdk.services.s3.S3AsyncClient
 import cats.implicits._
-import com.colored.be.models.queue_requests.{
-  ColorsRequest,
-  MetadataRequest,
-  ResizeRequest
-}
+import com.colored.be.models.queue_requests._
+import com.colored.be.models.tables.{ImageMetadataTable, UserView}
 import com.rabbitmq.client.Channel
 import io.circe.syntax._
 
-import scala.util.{Failure, Success, Try}
+import scala.util.Try
 
 class ImagesService(
     imagesRepository: ImagesRepository,
@@ -117,7 +97,141 @@ class ImagesService(
       )
     } yield queueResult
 
-  def sendColoriaRequests(
+  def listImages(): IO[Either[Throwable, List[ImageList]]] =
+    imagesRepository.listImages
+
+  def getImage(id: Int): IO[Either[Throwable, ImageGet]] = {
+    imagesRepository
+      .getImage(id)
+      .map(_.map { getImageView =>
+        ImageGet(
+          getImageView.image.id,
+          getImageView.image.title,
+          getImageView.image.description,
+          getImageView.image.width,
+          getImageView.image.height,
+          getImageView.image.xs,
+          getImageView.image.sm,
+          getImageView.image.md,
+          getImageView.image.lg,
+          getImageView.image.original,
+          mapUserViewOnDto(getImageView.userView),
+          getImageView.album.map(a => AlbumDto(a.id, a.title)),
+          getImageView.genre.map(g => GenreDto(g.id, g.title)),
+          getImageView.tags.map(t => TagDto(t.id, t.title)),
+          getImageView.viewsCount,
+          getImageView.accessLevel.level,
+          LikesList(
+            getImageView.likesView.length,
+            getImageView.likesView.map { likeView =>
+              LikeDto(
+                mapUserViewOnDto(likeView.userView),
+                likeView.like.createdAt
+              )
+            }
+          ),
+          CommentsList(
+            getImageView.commentsView.length,
+            getImageView.commentsView.map { commentView =>
+              CommentDto(
+                mapUserViewOnDto(commentView.userView),
+                commentView.comment.text,
+                commentView.comment.createdAt
+              )
+            }
+          ),
+          getImageView.colors.map(c => ColorDto(c.color, c.pct)),
+          getImageView.metadata.map(mapMetadataOnDto),
+          getImageView.image.createdAt
+        )
+      })
+  }
+
+  def updateImage(id: Int, image: ImagePut): IO[Either[Throwable, ImageGet]] =
+    for {
+      updateResult <- imagesRepository.updateImage(id, image)
+      getResult <- updateResult.fold(
+        e => Either.left[Throwable, ImageGet](e).pure[IO],
+        _ => getImage(id)
+      )
+    } yield getResult
+
+  def deleteImage(id: Int): IO[Either[Throwable, Int]] =
+    imagesRepository.deleteImage(id)
+
+  def listAccessLevels(): IO[Either[Throwable, List[ImageAccessLevelDto]]] =
+    imagesRepository
+      .listAccessLevels()
+      .map(_.map(_.map(ial => ImageAccessLevelDto(ial.id, ial.level))))
+
+  /*
+  Likes
+   */
+  def like(likePost: LikePost): IO[Either[Throwable, LikesList]] =
+    imagesRepository
+      .like(likePost.imageId, likePost.userId)
+      .map(
+        _.map(likesView =>
+          LikesList(
+            likesView.length,
+            likesView.map { likeView =>
+              LikeDto(
+                mapUserViewOnDto(likeView.userView),
+                likeView.like.createdAt
+              )
+            }
+          )
+        )
+      )
+
+  def unlike(likePost: LikePost): IO[Either[Throwable, LikesList]] =
+    imagesRepository
+      .unlike(likePost.imageId, likePost.userId)
+      .map(
+        _.map(likesView =>
+          LikesList(
+            likesView.length,
+            likesView.map { likeView =>
+              LikeDto(
+                mapUserViewOnDto(likeView.userView),
+                likeView.like.createdAt
+              )
+            }
+          )
+        )
+      )
+
+  /*
+  Comments
+   */
+  def saveComment(
+      imageId: Int,
+      commentPost: CommentPost
+  ): IO[Either[Throwable, CommentsList]] =
+    imagesRepository
+      .saveComment(imageId, commentPost.userId, commentPost.text)
+      .map(
+        _.map(commentsView =>
+          CommentsList(
+            commentsView.length,
+            commentsView.map { commentView =>
+              CommentDto(
+                mapUserViewOnDto(commentView.userView),
+                commentView.comment.text,
+                commentView.comment.createdAt
+              )
+            }
+          )
+        )
+      )
+
+  /*
+   Coloria integration
+   TODO: Use avast/scala-rabbitmq client
+   TODO: Investigate how we can get rid of slicing and dicing
+    original url to obtain bucket, key, filename
+   */
+  private def sendColoriaRequests(
       imageId: Int,
       imagePost: ImagePost
   ): IO[Either[Throwable, Int]] =
@@ -164,133 +278,35 @@ class ImagesService(
       }.toEither
     }
 
-  def listImages(): IO[Either[Throwable, List[ImageList]]] =
-    imagesRepository.listImages
-
-  def getImage(id: Int): IO[Either[Throwable, ImageGet]] = {
-    imagesRepository
-      .getImage(id)
-      .map(_.map {
-        case (
-            image,
-            accessLevel,
-            user,
-            album,
-            genre,
-            tags,
-            views,
-            likes,
-            comments,
-            colors,
-            metadata
-            ) =>
-          ImageGet(
-            image.id,
-            image.title,
-            image.description,
-            image.width,
-            image.height,
-            image.xs,
-            image.sm,
-            image.md,
-            image.lg,
-            image.original,
-            user match {
-              case (user, avatar) =>
-                UserDto(
-                  user.id,
-                  user.username,
-                  avatar map { a =>
-                    UserAvatarDto(
-                      a.xs,
-                      a.sm,
-                      a.md
-                    )
-                  }
-                )
-            },
-            album.map(a => AlbumDto(a.id, a.title)),
-            genre.map(g => GenreDto(g.id, g.title)),
-            tags.map(t => TagDto(t.id, t.title)),
-            views,
-            accessLevel.level,
-            LikesList(
-              likes.length,
-              likes.map {
-                case (like, user, avatar) =>
-                  LikeDto(
-                    UserDto(
-                      like.userId,
-                      user.username,
-                      avatar map { a =>
-                        UserAvatarDto(
-                          a.xs,
-                          a.sm,
-                          a.md
-                        )
-                      }
-                    ),
-                    like.createdAt
-                  )
-              }
-            ),
-            CommentsList(
-              comments.length,
-              comments.map {
-                case (comment, user, avatar) =>
-                  CommentDto(
-                    UserDto(
-                      comment.userId,
-                      user.username,
-                      avatar map { a =>
-                        UserAvatarDto(
-                          a.xs,
-                          a.sm,
-                          a.md
-                        )
-                      }
-                    ),
-                    comment.text,
-                    comment.createdAt
-                  )
-              }
-            ),
-            colors.map(c => ColorDto(c.color, c.pct)),
-            metadata.map(m =>
-              ImageMetadataDto(
-                m.exposureTimeDescription,
-                m.exposureTimeInverse,
-                m.isoDescription,
-                m.iso,
-                m.apertureDescription,
-                m.aperture,
-                m.gpsLatitudeDescription,
-                m.gpsLatitude,
-                m.gpsLongitudeDescription,
-                m.gpsLongitude,
-                m.gpsAltitudeDescription,
-                m.gpsAltitudeMeters
-              )
-            ),
-            image.createdAt
-          )
-      })
+  // Mappers
+  private def mapUserViewOnDto(u: UserView): UserDto = {
+    UserDto(
+      u.user.id,
+      u.user.username,
+      u.avatar.map(a =>
+        UserAvatarDto(
+          a.xs,
+          a.sm,
+          a.md
+        )
+      )
+    )
   }
 
-  def updateImage(id: Int, image: ImagePut): IO[Either[Throwable, ImageGet]] =
-    for {
-      updateResult <- imagesRepository.updateImage(id, image)
-      getResult <- updateResult.fold(
-        e => Either.left[Throwable, ImageGet](e).pure[IO],
-        _ => getImage(id)
-      )
-    } yield getResult
-
-  def deleteImage(id: Int): IO[Either[Throwable, Int]] =
-    imagesRepository.deleteImage(id)
-
-  def listAccessLevels(): IO[Either[Throwable, List[ImageAccessLevelDto]]] =
-    imagesRepository
-      .listAccessLevels()
-      .map(_.map(_.map(ial => ImageAccessLevelDto(ial.id, ial.level))))
+  private def mapMetadataOnDto(m: ImageMetadataTable): ImageMetadataDto = {
+    ImageMetadataDto(
+      m.exposureTimeDescription,
+      m.exposureTimeInverse,
+      m.isoDescription,
+      m.iso,
+      m.apertureDescription,
+      m.aperture,
+      m.gpsLatitudeDescription,
+      m.gpsLatitude,
+      m.gpsLongitudeDescription,
+      m.gpsLongitude,
+      m.gpsAltitudeDescription,
+      m.gpsAltitudeMeters
+    )
+  }
 }

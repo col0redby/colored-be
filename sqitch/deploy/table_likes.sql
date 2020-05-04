@@ -11,11 +11,10 @@ USE colored;
 
 CREATE TABLE IF NOT EXISTS likes 
 (
-  id         MEDIUMINT AUTO_INCREMENT PRIMARY KEY,
-  INDEX image_ind(image_id),
   image_id   MEDIUMINT,
   user_id    MEDIUMINT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (image_id, user_id),
   FOREIGN KEY (image_id) REFERENCES images (id) ON DELETE CASCADE,
   FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );

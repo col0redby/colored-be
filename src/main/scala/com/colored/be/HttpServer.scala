@@ -1,9 +1,6 @@
 package com.colored.be
 
 import java.io.File
-import java.nio.file.Paths
-
-import blobstore.fs.FileStore
 import blobstore.s3.S3Store
 import cats.effect.{Blocker, ConcurrentEffect, ContextShift, ExitCode, IO, Resource, Timer}
 import com.colored.be.aws.AwsSdk
@@ -41,9 +38,6 @@ object HttpServer {
       transactor <- Database.transactor(config.database, ec, blocker)
       s3AsyncClient <- AwsSdk.s3AsyncClient(config)
       s3Store <- Resource.liftF(S3Store[IO](s3AsyncClient))
-      fileStore <- Resource.liftF(
-        IO.pure(FileStore[IO](Paths.get("/"), blocker))
-      )
       rabbitConnection <- Resource.fromAutoCloseable(IO.delay {
         val factory = new ConnectionFactory
         factory.setHost(config.rabbitMQ.connection.host)
@@ -61,7 +55,7 @@ object HttpServer {
 
         channel
       })
-    } yield Resources(transactor, s3AsyncClient, s3Store, fileStore, rabbitConnection, rabbitChannel, config)
+    } yield Resources(transactor, s3AsyncClient, s3Store, rabbitConnection, rabbitChannel, config)
   }
 
   private def create(resources: Resources)(
@@ -96,7 +90,6 @@ object HttpServer {
       transactor: HikariTransactor[IO],
       s3AsyncClient: S3AsyncClient,
       s3Store: S3Store[IO],
-      fileStore: FileStore[IO],
       rabbitConnection: Connection,
       rabbitChannel: Channel,
       config: Config
