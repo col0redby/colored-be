@@ -138,7 +138,7 @@ class ImagesRoutes(imagesService: ImagesService) {
     /*
     Comments
      */
-    case req @ POST -> Root / "api" / "v1" / "images" / IntVar(id) / "comment" =>
+    case req @ POST -> Root / "api" / "v1" / "images" / IntVar(id) / "comments" =>
       for {
         comment <- req.as[CommentPost]
         commentSaveResult <- imagesService.saveComment(id, comment)
