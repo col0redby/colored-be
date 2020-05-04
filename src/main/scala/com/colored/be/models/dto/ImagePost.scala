@@ -1,14 +1,15 @@
 package com.colored.be.models.dto
 
-import io.circe.{Decoder, Encoder}
-import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
+import io.circe.Decoder
+import io.circe.generic.semiauto.deriveDecoder
 
 case class ImagePost (
     title: String,
-    description: String,
+    description: Option[String],
     original: String,
     userId: Int,
-    genreId: Int,
+    albumId: Option[Int],
+    genreId: Option[Int],
     accessLevelId: Int
 )
 

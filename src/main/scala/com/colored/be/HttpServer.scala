@@ -18,6 +18,7 @@ import org.http4s.server.blaze.BlazeServerBuilder
 import org.http4s.implicits._
 import software.amazon.awssdk.services.s3.S3AsyncClient
 import cats.implicits._
+import com.rabbitmq.client.{Channel, Connection, ConnectionFactory}
 
 object HttpServer {
   def create(configFile: File)(
@@ -43,7 +44,24 @@ object HttpServer {
       fileStore <- Resource.liftF(
         IO.pure(FileStore[IO](Paths.get("/"), blocker))
       )
-    } yield Resources(transactor, s3AsyncClient, s3Store, fileStore, config)
+      rabbitConnection <- Resource.fromAutoCloseable(IO.delay {
+        val factory = new ConnectionFactory
+        factory.setHost(config.rabbitMQ.connection.host)
+        factory.setPort(config.rabbitMQ.connection.port)
+        factory.newConnection()
+      })
+      rabbitChannel <- Resource.fromAutoCloseable(IO.delay {
+        val channel = rabbitConnection.createChannel()
+        channel
+          .queueDeclare(config.rabbitMQ.queues.resize.name, false, false, false, null)
+        channel
+          .queueDeclare(config.rabbitMQ.queues.metadata.name, false, false, false, null)
+        channel
+          .queueDeclare(config.rabbitMQ.queues.colors.name, false, false, false, null)
+
+        channel
+      })
+    } yield Resources(transactor, s3AsyncClient, s3Store, fileStore, rabbitConnection, rabbitChannel, config)
   }
 
   private def create(resources: Resources)(
@@ -55,6 +73,7 @@ object HttpServer {
       imagesRepository,
       resources.s3AsyncClient,
       resources.s3Store,
+      resources.rabbitChannel,
       resources.config
     )
     val imagesRoutes = new ImagesRoutes(imagesService).routes
@@ -78,6 +97,8 @@ object HttpServer {
       s3AsyncClient: S3AsyncClient,
       s3Store: S3Store[IO],
       fileStore: FileStore[IO],
+      rabbitConnection: Connection,
+      rabbitChannel: Channel,
       config: Config
   )
 }

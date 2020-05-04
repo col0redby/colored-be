@@ -1,5 +1,7 @@
 package com.colored.be.routes
 
+import java.net.URL
+
 import cats.effect.IO
 import org.http4s.dsl.io._
 import org.http4s.HttpRoutes
@@ -34,11 +36,11 @@ class ImagesRoutes(imagesService: ImagesService) {
                   imagePart.body,
                   filename
                 )
-                objectUrl <- uploadResult match {
+                res <- uploadResult match {
                   case Left(error)  => InternalServerError(error.getMessage)
                   case Right(value) => Ok(value)
                 }
-              } yield objectUrl
+              } yield res
             case None =>
               UnsupportedMediaType(
                 s"At least one part should contain one of the following " +

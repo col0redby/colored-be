@@ -1,17 +1,17 @@
 package com.colored.be.models.tables
 
 case class ImageMetadataTable(
-    id: Int,
-    exposureTimeDescription: String,
-    exposureTimeInverse: Int,
-    isoDescription: String,
-    iso: Int,
-    apertureDescription: String,
-    aperture: Float,
-    gpsLatitudeDescription: String,
-    gpsLatitude: Double,
-    gpsLongitudeDescription: String,
-    gpsLongitude: Double,
-    gpsAltitudeDescription: String,
-    gpsAltitudeMeters: Float
+    imageId: Int,
+    exposureTimeDescription: Option[String],
+    exposureTimeInverse: Option[Int],
+    isoDescription: Option[String],
+    iso: Option[Int],
+    apertureDescription: Option[String],
+    aperture: Option[Float],
+    gpsLatitudeDescription: Option[String],
+    gpsLatitude: Option[Double],
+    gpsLongitudeDescription: Option[String],
+    gpsLongitude: Option[Double],
+    gpsAltitudeDescription: Option[String],
+    gpsAltitudeMeters: Option[Float]
 )

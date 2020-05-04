@@ -41,6 +41,8 @@ lazy val root = (project in file("."))
       "org.http4s" %% "http4s-blaze-server" % http4sVersion,
       "org.http4s" %% "http4s-blaze-client" % http4sVersion,
       "org.http4s" %% "http4s-circe" % http4sVersion,
+      "com.amazonaws" % "aws-java-sdk-s3" % "1.11.774",
+      "com.rabbitmq" % "amqp-client" % "5.9.0",
       scalaTest % Test
     )
   )

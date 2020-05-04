@@ -1,21 +1,49 @@
 package com.colored.be.service
 
+import java.net.{URL, URLDecoder}
+
 import blobstore.s3.{S3MetaInfo, S3Path, S3Store}
 import cats.effect.IO
 import com.colored.be.config.Config
-import com.colored.be.models.{ImageAccessLevel, User}
-import com.colored.be.models.dto.{AlbumDto, ColorDto, CommentDto, CommentsList, GenreDto, ImageAccessLevelDto, ImageGet, ImageList, ImageMetadataDto, ImagePost, ImagePut, LikeDto, LikesList, TagDto, UserAvatarDto, UserDto}
+import com.colored.be.models.User
+import com.colored.be.models.dto.{
+  AlbumDto,
+  ColorDto,
+  CommentDto,
+  CommentsList,
+  GenreDto,
+  ImageAccessLevelDto,
+  ImageGet,
+  ImageList,
+  ImageMetadataDto,
+  ImagePost,
+  ImagePut,
+  LikeDto,
+  LikesList,
+  TagDto,
+  UserAvatarDto,
+  UserDto
+}
 import com.colored.be.repository.ImagesRepository
 import software.amazon.awssdk.services.s3.model.{GetUrlRequest, ObjectCannedACL}
 import fs2.Stream
 import software.amazon.awssdk.services.s3.S3AsyncClient
 import cats.implicits._
-import com.colored.be.models.exceptions.ImageNotFound
+import com.colored.be.models.queue_requests.{
+  ColorsRequest,
+  MetadataRequest,
+  ResizeRequest
+}
+import com.rabbitmq.client.Channel
+import io.circe.syntax._
+
+import scala.util.{Failure, Success, Try}
 
 class ImagesService(
     imagesRepository: ImagesRepository,
     s3: S3AsyncClient,
     s3Store: S3Store[IO],
+    rabbitChannel: Channel,
     config: Config
 ) {
 
@@ -32,9 +60,11 @@ class ImagesService(
       filename = headersFileName.fold(
         user.username + System.currentTimeMillis()
       )(identity)
+      bucket = config.aws.s3.bucket
+      key = s"${user.username}/${config.aws.s3.imageOriginalFolder}/$filename"
       path = S3Path(
-        config.aws.s3.bucket,
-        s"${user.username}/${config.aws.s3.imageOriginalFolder}/$filename",
+        bucket,
+        key,
         Some(
           S3MetaInfo.const(
             constSize = Some(streamSize),
@@ -79,7 +109,60 @@ class ImagesService(
   }
 
   def saveImage(imagePost: ImagePost): IO[Either[Throwable, Int]] =
-    imagesRepository.saveImage(imagePost)
+    for {
+      saveResult <- imagesRepository.saveImage(imagePost)
+      queueResult <- saveResult.fold(
+        error => Either.left(error).pure[IO],
+        imageId => sendColoriaRequests(imageId, imagePost)
+      )
+    } yield queueResult
+
+  def sendColoriaRequests(
+      imageId: Int,
+      imagePost: ImagePost
+  ): IO[Either[Throwable, Int]] =
+    IO {
+      Try {
+        val originalUrl =
+          new URL(URLDecoder.decode(imagePost.original, "UTF-8"))
+        val originalBucket = originalUrl.getHost.split('.').head
+        val originalKey = originalUrl.getPath.drop(1)
+        val filename = originalUrl.getPath.split("/").last
+        val resizeRequest = ResizeRequest(
+          imageId,
+          originalBucket,
+          originalKey,
+          filename,
+          originalBucket,
+          originalKey.split("original").head.dropRight(1)
+        )
+        rabbitChannel.basicPublish(
+          "",
+          config.rabbitMQ.queues.resize.name,
+          null,
+          resizeRequest.asJson.noSpaces.getBytes()
+        )
+
+        val metadataRequest =
+          MetadataRequest(imageId, originalBucket, originalKey)
+        rabbitChannel.basicPublish(
+          "",
+          config.rabbitMQ.queues.metadata.name,
+          null,
+          metadataRequest.asJson.noSpaces.getBytes()
+        )
+
+        val colorsRequest = ColorsRequest(imageId, originalBucket, originalKey)
+        rabbitChannel.basicPublish(
+          "",
+          config.rabbitMQ.queues.colors.name,
+          null,
+          colorsRequest.asJson.noSpaces.getBytes()
+        )
+
+        imageId
+      }.toEither
+    }
 
   def listImages(): IO[Either[Throwable, List[ImageList]]] =
     imagesRepository.listImages
@@ -124,7 +207,7 @@ class ImagesService(
                       a.md
                     )
                   }
-            )
+                )
             },
             album.map(a => AlbumDto(a.id, a.title)),
             genre.map(g => GenreDto(g.id, g.title)),
@@ -133,58 +216,62 @@ class ImagesService(
             accessLevel.level,
             LikesList(
               likes.length,
-              likes.map { case (like, user, avatar) =>
-                LikeDto(
-                  UserDto(
-                    like.userId,
-                    user.username,
-                    avatar map { a =>
-                      UserAvatarDto(
-                        a.xs,
-                        a.sm,
-                        a.md
-                      )
-                    }
-                  ),
-                  like.createdAt
-                )
+              likes.map {
+                case (like, user, avatar) =>
+                  LikeDto(
+                    UserDto(
+                      like.userId,
+                      user.username,
+                      avatar map { a =>
+                        UserAvatarDto(
+                          a.xs,
+                          a.sm,
+                          a.md
+                        )
+                      }
+                    ),
+                    like.createdAt
+                  )
               }
             ),
             CommentsList(
               comments.length,
-              comments.map { case(comment, user, avatar) =>
-                CommentDto(
-                  UserDto(
-                    comment.userId,
-                    user.username,
-                    avatar map { a =>
-                      UserAvatarDto(
-                        a.xs,
-                        a.sm,
-                        a.md
-                      )
-                    }
-                  ),
-                  comment.text,
-                  comment.createdAt
-                )
+              comments.map {
+                case (comment, user, avatar) =>
+                  CommentDto(
+                    UserDto(
+                      comment.userId,
+                      user.username,
+                      avatar map { a =>
+                        UserAvatarDto(
+                          a.xs,
+                          a.sm,
+                          a.md
+                        )
+                      }
+                    ),
+                    comment.text,
+                    comment.createdAt
+                  )
               }
             ),
             colors.map(c => ColorDto(c.color, c.pct)),
-            metadata.map(m => ImageMetadataDto(
-              m.exposureTimeDescription,
-              m.exposureTimeInverse,
-              m.isoDescription,
-              m.iso,
-              m.apertureDescription,
-              m.aperture,
-              m.gpsLatitudeDescription,
-              m.gpsLatitude,
-              m.gpsLongitudeDescription,
-              m.gpsLongitude,
-              m.gpsAltitudeDescription,
-              m.gpsAltitudeMeters
-            )),
+            metadata.map(m =>
+              ImageMetadataDto(
+                m.exposureTimeDescription,
+                m.exposureTimeInverse,
+                m.isoDescription,
+                m.iso,
+                m.apertureDescription,
+                m.aperture,
+                m.gpsLatitudeDescription,
+                m.gpsLatitude,
+                m.gpsLongitudeDescription,
+                m.gpsLongitude,
+                m.gpsAltitudeDescription,
+                m.gpsAltitudeMeters
+              )
+            ),
             image.createdAt
           )
       })
@@ -193,12 +280,17 @@ class ImagesService(
   def updateImage(id: Int, image: ImagePut): IO[Either[Throwable, ImageGet]] =
     for {
       updateResult <- imagesRepository.updateImage(id, image)
-      getResult <- updateResult.fold(e => Either.left[Throwable, ImageGet](e).pure[IO], _ => getImage(id))
+      getResult <- updateResult.fold(
+        e => Either.left[Throwable, ImageGet](e).pure[IO],
+        _ => getImage(id)
+      )
     } yield getResult
 
   def deleteImage(id: Int): IO[Either[Throwable, Int]] =
     imagesRepository.deleteImage(id)
 
   def listAccessLevels(): IO[Either[Throwable, List[ImageAccessLevelDto]]] =
-    imagesRepository.listAccessLevels().map(_.map(_.map(ial => ImageAccessLevelDto(ial.id, ial.level))))
+    imagesRepository
+      .listAccessLevels()
+      .map(_.map(_.map(ial => ImageAccessLevelDto(ial.id, ial.level))))
 }

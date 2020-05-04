@@ -9,7 +9,7 @@ import io.circe.generic.semiauto.deriveEncoder
 case class ImageGet (
     id: Int,
     title: String,
-    description: String,
+    description: Option[String],
     width: Option[Int],
     height: Option[Int],
     xs: Option[String],

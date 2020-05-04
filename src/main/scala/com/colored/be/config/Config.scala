@@ -36,7 +36,32 @@ final case class CredentialsProvider(
     credentials: String
 )
 
-case class Config(server: ServerConfig, database: DatabaseConfig, aws: Aws)
+case class RabbitMQConfig(
+    connection: RabbitMQConnection,
+    queues: Queues
+)
+
+case class RabbitMQConnection(
+    host: String,
+    port: Int
+)
+
+case class Queues(
+    resize: Queue,
+    metadata: Queue,
+    colors: Queue
+)
+
+case class Queue(
+    name: String
+)
+
+case class Config(
+    server: ServerConfig,
+    database: DatabaseConfig,
+    aws: Aws,
+    rabbitMQ: RabbitMQConfig
+)
 
 object Config {
 

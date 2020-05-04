@@ -7,7 +7,7 @@ import com.colored.be.models.ImageAccessLevel
 case class ImagesTable(
   id: Int,
   title: String,
-  description: String,
+  description: Option[String],
   width: Option[Int],
   height: Option[Int],
   xs: Option[String],
