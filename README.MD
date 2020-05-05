@@ -1,6 +1,6 @@
 # Colored-be
 
-![Preview](https://github.com/col0redby/colored-be/blob/gif-preview/media/ColoredGif.gif)
+![Preview](https://github.com/col0redby/colored-be/blob/media/media/ColoredGif.gif)
 ### To run locally
 
 ##### Start mysql
