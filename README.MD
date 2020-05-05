@@ -1,5 +1,6 @@
 # Colored-be
 
+![Preview](https://drive.google.com/file/d/1wrzRXahjtJqjTOfT1hRHrqudvWSorRMM/view?usp=sharing)
 ### To run locally
 
 ##### Start mysql
