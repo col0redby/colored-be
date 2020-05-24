@@ -47,4 +47,14 @@ VALUES (1, '1/200 sec', 200, '100', 100, 'f/4.5', 4.5, '45 45 45', 0.454545, '54
 INSERT INTO tags(title) VALUES ('Portrait');
 INSERT INTO image_tags(image_id, tag_id) VALUES (1, 1);
 
+INSERT INTO user_avatars
+(user_id,
+ xs,
+ sm,
+ md)
+VALUES (1,
+        'https://colored-backend-eu-north-1.s3.eu-north-1.amazonaws.com/nkharitonov/50/DSC_0099.jpg',
+        'https://colored-backend-eu-north-1.s3.eu-north-1.amazonaws.com/nkharitonov/200/DSC_0099.jpg',
+        'https://colored-backend-eu-north-1.s3.eu-north-1.amazonaws.com/nkharitonov/600/DSC_0099.jpg');
+
 COMMIT;
